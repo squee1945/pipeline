@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"knative.dev/pkg/apis"
+	logtesting "knative.dev/pkg/logging/testing"
 )
 
 var validResource = v1beta1.TaskResource{
@@ -1277,4 +1278,79 @@ func TestIncompatibleAPIVersions(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestTaskRefValidate(t *testing.T) {
+	type contextMod func(context.Context) context.Context
+	cases := []struct {
+		desc     string
+		tr       *v1beta1.TaskRef
+		features []string
+	}{
+		{
+			desc: "minimal",
+			tr: &v1beta1.TaskRef{
+				Name: "my-taskref",
+			},
+		},
+		{
+			desc: "with bundle",
+			tr: &v1beta1.TaskRef{
+				Name:   "my-taskref",
+				Bundle: "docker.io/foo",
+			},
+			features: []string{"enable-tekton-oci-bundles"},
+		},
+		{
+			desc: "with bundle and verification",
+			tr: &v1beta1.TaskRef{
+				Name:   "my-taskref",
+				Bundle: "docker.io/foo",
+				Verification: &v1beta1.TaskVerification{
+					Signer: "cosign",
+					Key:    "some-public-key",
+				},
+			},
+			features: []string{
+				"enable-tekton-oci-bundles",
+				"enable-task-bundle-verification",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctx := enableFeatureFlags(context.Background(), t, tc.features...)
+
+			if err := tc.tr.Validate(ctx); err != nil {
+				t.Errorf("TaskRef.Validate() = %v", err)
+			}
+		})
+	}
+}
+
+func TestTaskRefValidateErrors(t *testing.T) {
+	t.Fail()
+}
+
+func TestTaskVerificationValidate(t *testing.T) {
+	t.Fail()
+}
+
+func TestTaskVerificationValidateErrors(t *testing.T) {
+	t.Fail()
+}
+
+func enableFeatureFlags(ctx context.Context, t *testing.T, flags ...string) context.Context {
+	t.Helper()
+	data := make(map[string]string)
+	for _, flag := range flags {
+		data[flag] = "true"
+	}
+	s := config.NewStore(logtesting.TestLogger(t))
+	s.OnConfigChanged(&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: config.GetFeatureFlagsConfigName()},
+		Data:       data,
+	})
+	return s.ToContext(ctx)
 }

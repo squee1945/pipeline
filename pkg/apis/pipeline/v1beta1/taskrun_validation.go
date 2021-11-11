@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/tektoncd/pipeline/pkg/apis/config"
 	"github.com/tektoncd/pipeline/pkg/apis/validate"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -43,6 +42,7 @@ func (tr *TaskRun) Validate(ctx context.Context) *apis.FieldError {
 func (ts *TaskRunSpec) Validate(ctx context.Context) (errs *apis.FieldError) {
 	cfg := config.FromContextOrDefaults(ctx)
 
+<<<<<<< HEAD
 	// Must have exactly one of taskRef and taskSpec.
 	if ts.TaskRef == nil && ts.TaskSpec == nil {
 		errs = errs.Also(apis.ErrMissingOneOf("taskRef", "taskSpec"))
@@ -74,6 +74,22 @@ func (ts *TaskRunSpec) Validate(ctx context.Context) (errs *apis.FieldError) {
 	}
 
 	// Validate TaskSpec if it's present
+=======
+	// Validate exactly one of taskspec or taskref.
+	if ts.TaskRef != nil && ts.TaskSpec != nil {
+		errs = errs.Also(apis.ErrMultipleOneOf("taskspec", "taskref"))
+	}
+	if ts.TaskRef == nil && ts.TaskSpec == nil {
+		errs = errs.Also(apis.ErrMissingOneOf("taskspec", "taskref"))
+	}
+
+	// Validate TaskRef if it's present.
+	if ts.TaskRef != nil {
+		errs = errs.Also(ts.TaskRef.Validate(ctx).ViaField("taskref"))
+	}
+
+	// Validate TaskSpec if it's present.
+>>>>>>> a7655eacc (Commit in-progress to rebase.)
 	if ts.TaskSpec != nil {
 		errs = errs.Also(ts.TaskSpec.Validate(ctx).ViaField("taskSpec"))
 	}

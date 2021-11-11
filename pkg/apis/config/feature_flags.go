@@ -76,6 +76,7 @@ type FeatureFlags struct {
 	EnableCustomTasks                bool
 	ScopeWhenExpressionsToTask       bool
 	EnableAPIFields                  string
+	EnableTaskBundleVerification     bool
 }
 
 // GetFeatureFlagsConfigName returns the name of the configmap containing all
