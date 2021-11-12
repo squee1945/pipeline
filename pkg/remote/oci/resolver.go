@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
 	imgname "github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	ociremote "github.com/google/go-containerregistry/pkg/v1/remote"
@@ -35,13 +36,13 @@ import (
 )
 
 const (
-	// KindAnnotation is an OCI annotation for the bundle kind
+	// KindAnnotation is an OCI annotation for the bundle kind.
 	KindAnnotation = "dev.tekton.image.kind"
-	// APIVersionAnnotation is an OCI annotation for the bundle version
+	// APIVersionAnnotation is an OCI annotation for the bundle version.
 	APIVersionAnnotation = "dev.tekton.image.apiVersion"
-	// TitleAnnotation is an OCI annotation for the bundle title
+	// TitleAnnotation is an OCI annotation for the bundle title.
 	TitleAnnotation = "dev.tekton.image.name"
-	// MaximumBundleObjects defines the maximum number of objects in a bundle
+	// MaximumBundleObjects defines the maximum number of objects in a bundle.
 	MaximumBundleObjects = 10
 )
 
@@ -50,26 +51,48 @@ type Resolver struct {
 	imageReference string
 	keychain       authn.Keychain
 	timeout        time.Duration
+
+	signer string
+	key    string
+}
+
+type ResolverOption func(r *Resolver)
+
+func WithVerification(signer, key string) ResolverOption {
+	return func(r *Resolver) {
+		r.signer = signer
+		r.key = key
+	}
 }
 
 // NewResolver is a convenience function to return a new OCI resolver instance as a remote.Resolver with a short, 1m
 // timeout for resolving an individual image.
-func NewResolver(ref string, keychain authn.Keychain) remote.Resolver {
-	return &Resolver{imageReference: ref, keychain: keychain, timeout: time.Second * 60}
+func NewResolver(ref string, keychain authn.Keychain, opts ...ResolverOption) remote.Resolver {
+	r := &Resolver{imageReference: ref, keychain: keychain, timeout: time.Second * 60}
+	for _, o := range opts {
+		o(r)
+	}
+	return r
 }
 
-// List retrieves a flat set of Tekton objects
+// List retrieves a flat set of Tekton objects.
 func (o *Resolver) List() ([]remote.ResolvedObject, error) {
+	imgRef, err := imgname.ParseReference(o.imageReference)
+	if err != nil {
+		return nil, fmt.Errorf("%s is an unparseable image reference: %w", o.imageReference, err)
+	}
+
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), o.timeout)
 	defer cancel()
-	img, err := o.retrieveImage(timeoutCtx)
+
+	img, err := o.retrieveImage(timeoutCtx, imgRef)
 	if err != nil {
 		return nil, err
 	}
 
 	manifest, err := img.Manifest()
 	if err != nil {
-		return nil, fmt.Errorf("Could not parse image manifest: %w", err)
+		return nil, fmt.Errorf("could not parse image manifest: %w", err)
 	}
 
 	if err := o.checkImageCompliance(manifest); err != nil {
@@ -88,11 +111,17 @@ func (o *Resolver) List() ([]remote.ResolvedObject, error) {
 	return contents, nil
 }
 
-// Get retrieves a specific object with the given Kind and name
+// Get retrieves a specific object with the given Kind and name.
 func (o *Resolver) Get(kind, name string) (runtime.Object, error) {
+	imgRef, err := imgname.ParseReference(o.imageReference)
+	if err != nil {
+		return nil, fmt.Errorf("%s is an unparseable image reference: %w", o.imageReference, err)
+	}
+
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), o.timeout)
 	defer cancel()
-	img, err := o.retrieveImage(timeoutCtx)
+
+	img, err := o.retrieveImage(timeoutCtx, imgRef)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +129,10 @@ func (o *Resolver) Get(kind, name string) (runtime.Object, error) {
 	manifest, err := img.Manifest()
 	if err != nil {
 		return nil, fmt.Errorf("could not parse image manifest: %w", err)
+	}
+
+	if err := o.verifyImage(timeoutCtx, imgRef); err != nil {
+		return nil, err
 	}
 
 	if err := o.checkImageCompliance(manifest); err != nil {
@@ -128,7 +161,14 @@ func (o *Resolver) Get(kind, name string) (runtime.Object, error) {
 			obj, err := readTarLayer(layerMap[l.Digest.String()])
 			if err != nil {
 				// This could still be a raw layer so try to read it as that instead.
-				return readRawLayer(layers[idx])
+				obj, err = readRawLayer(layers[idx])
+				if err != nil {
+					return nil, err
+				}
+			}
+			// TODO: if image is to be verified, all step image references must be by digest (at least for initial iterations).
+			if o.signer != "" {
+
 			}
 			return obj, nil
 		}
@@ -137,11 +177,7 @@ func (o *Resolver) Get(kind, name string) (runtime.Object, error) {
 }
 
 // retrieveImage will fetch the image's contents and manifest.
-func (o *Resolver) retrieveImage(ctx context.Context) (v1.Image, error) {
-	imgRef, err := imgname.ParseReference(o.imageReference)
-	if err != nil {
-		return nil, fmt.Errorf("%s is an unparseable image reference: %w", o.imageReference, err)
-	}
+func (o *Resolver) retrieveImage(ctx context.Context, imgRef name.Reference) (v1.Image, error) {
 	return ociremote.Image(imgRef, ociremote.WithAuthFromKeychain(o.keychain), ociremote.WithContext(ctx))
 }
 
@@ -175,11 +211,30 @@ func (o *Resolver) checkImageCompliance(manifest *v1.Manifest) error {
 	return nil
 }
 
+func (o *Resolver) verifyImage(ctx context.Context, imgRef name.Reference) error {
+	if o.signer == "" {
+		return nil
+	}
+
+	verifier, err := lookupVerifier(o.signer)
+	if err != nil {
+		return err
+	}
+	verified, err := verifier.Verify(ctx, imgRef, o.key, o.keychain)
+	if err != nil {
+		return err
+	}
+	if !verified {
+		return fmt.Errorf("signature on %s was not verified", imgRef)
+	}
+	return nil
+}
+
 // Utility function to read out the contents of an image layer, assumed to be a tarball, as a parsed Tekton resource.
 func readTarLayer(layer v1.Layer) (runtime.Object, error) {
 	rc, err := layer.Uncompressed()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read image layer: %w", err)
+		return nil, fmt.Errorf("failed to read image layer: %w", err)
 	}
 	defer rc.Close()
 
