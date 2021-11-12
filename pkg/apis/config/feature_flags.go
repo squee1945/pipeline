@@ -50,6 +50,8 @@ const (
 	DefaultScopeWhenExpressionsToTask = false
 	// DefaultEnableAPIFields is the default value for "enable-api-fields".
 	DefaultEnableAPIFields = StableAPIFields
+	// DefaultEnableTaskVerification is the default value for "enable-task-verification"
+	DefaultEnableTaskVerification = false
 
 	disableHomeEnvOverwriteKey          = "disable-home-env-overwrite"
 	disableWorkingDirOverwriteKey       = "disable-working-directory-overwrite"
@@ -61,6 +63,7 @@ const (
 	enableCustomTasks                   = "enable-custom-tasks"
 	enableAPIFields                     = "enable-api-fields"
 	scopeWhenExpressionsToTask          = "scope-when-expressions-to-task"
+	enableTaskVerification              = "enable-task-verification"
 )
 
 // FeatureFlags holds the features configurations
@@ -76,7 +79,7 @@ type FeatureFlags struct {
 	EnableCustomTasks                bool
 	ScopeWhenExpressionsToTask       bool
 	EnableAPIFields                  string
-	EnableTaskBundleVerification     bool
+	EnableTaskVerification           bool
 }
 
 // GetFeatureFlagsConfigName returns the name of the configmap containing all
@@ -138,11 +141,15 @@ func NewFeatureFlagsFromMap(cfgMap map[string]string) (*FeatureFlags, error) {
 	if tc.EnableAPIFields == AlphaAPIFields {
 		tc.EnableTektonOCIBundles = true
 		tc.EnableCustomTasks = true
+		tc.EnableTaskVerification = true
 	} else {
 		if err := setFeature(enableTektonOCIBundles, DefaultEnableTektonOciBundles, &tc.EnableTektonOCIBundles); err != nil {
 			return nil, err
 		}
 		if err := setFeature(enableCustomTasks, DefaultEnableCustomTasks, &tc.EnableCustomTasks); err != nil {
+			return nil, err
+		}
+		if err := setFeature(enableTaskVerification, DefaultEnableTaskVerification, &tc.EnableTaskVerification); err != nil {
 			return nil, err
 		}
 	}

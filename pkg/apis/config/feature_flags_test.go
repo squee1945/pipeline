@@ -54,6 +54,7 @@ func TestNewFeatureFlagsFromConfigMap(t *testing.T) {
 				EnableCustomTasks:                true,
 				ScopeWhenExpressionsToTask:       true,
 				EnableAPIFields:                  "alpha",
+				EnableTaskVerification:           true,
 			},
 			fileName: "feature-flags-all-flags-set",
 		},
@@ -64,6 +65,7 @@ func TestNewFeatureFlagsFromConfigMap(t *testing.T) {
 				// if the submitted text value is "false".
 				EnableTektonOCIBundles: true,
 				EnableCustomTasks:      true,
+				EnableTaskVerification: true,
 
 				DisableHomeEnvOverwrite:          true,
 				DisableWorkingDirOverwrite:       true,

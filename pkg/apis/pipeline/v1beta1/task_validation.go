@@ -426,9 +426,9 @@ func (tr *TaskRef) Validate(ctx context.Context) (errs *apis.FieldError) {
 	}
 
 	if tr.Verification != nil {
-		// If EnableTaskBundleVerification feature flag is on, validate it.
+		// If EnableTaskVerification feature flag is on, validate it.
 		// Otherwise, fail if it is present (as it won't be allowed or used).
-		if cfg.FeatureFlags.EnableTaskBundleVerification {
+		if cfg.FeatureFlags.EnableTaskVerification {
 			// Initial implementation requires a bundle
 			if tr.Bundle == "" {
 				errs = errs.Also(apis.ErrInvalidValue("bundle is required if verification is configured", "verification"))
@@ -443,8 +443,8 @@ func (tr *TaskRef) Validate(ctx context.Context) (errs *apis.FieldError) {
 	return errs
 }
 
-// Validate implements apis.Validatable
-func (tv *TaskVerification) Validate(_ context.Context) (errs *apis.FieldError) {
+// Validate validates a BundleVerification
+func (tv *BundleVerification) Validate(_ context.Context) (errs *apis.FieldError) {
 	if tv.Signer == "" {
 		errs = errs.Also(apis.ErrMissingField("signer"))
 	}
