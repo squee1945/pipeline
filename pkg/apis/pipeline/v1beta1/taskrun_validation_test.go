@@ -38,11 +38,7 @@ func TestTaskRun_Invalidate(t *testing.T) {
 	}{{
 		name:    "invalid taskspec",
 		taskRun: &v1beta1.TaskRun{},
-<<<<<<< HEAD
 		want: apis.ErrMissingOneOf("spec.taskRef", "spec.taskSpec").Also(
-=======
-		want: apis.ErrMissingOneOf("spec.taskspec", "spec.taskref").Also(
->>>>>>> a7655eacc (Commit in-progress to rebase.)
 			apis.ErrGeneric(`invalid resource name "": must be a valid DNS label`, "metadata.name")),
 	}}
 	for _, ts := range tests {
@@ -147,21 +143,13 @@ func TestTaskRunSpec_Invalidate(t *testing.T) {
 	}{{
 		name:    "invalid taskspec",
 		spec:    v1beta1.TaskRunSpec{},
-<<<<<<< HEAD
 		wantErr: apis.ErrMissingOneOf("taskRef", "taskSpec"),
-=======
-		wantErr: apis.ErrMissingOneOf("taskspec", "taskref"),
->>>>>>> a7655eacc (Commit in-progress to rebase.)
 	}, {
 		name: "missing taskref name",
 		spec: v1beta1.TaskRunSpec{
 			TaskRef: &v1beta1.TaskRef{},
 		},
-<<<<<<< HEAD
 		wantErr: apis.ErrMissingField("taskRef.name"),
-=======
-		wantErr: apis.ErrMissingField("taskref.name"),
->>>>>>> a7655eacc (Commit in-progress to rebase.)
 	}, {
 		name: "invalid taskref and taskspec together",
 		spec: v1beta1.TaskRunSpec{
@@ -175,11 +163,7 @@ func TestTaskRunSpec_Invalidate(t *testing.T) {
 				}}},
 			},
 		},
-<<<<<<< HEAD
 		wantErr: apis.ErrMultipleOneOf("taskRef", "taskSpec"),
-=======
-		wantErr: apis.ErrMultipleOneOf("taskspec", "taskref"),
->>>>>>> a7655eacc (Commit in-progress to rebase.)
 	}, {
 		name: "negative pipeline timeout",
 		spec: v1beta1.TaskRunSpec{

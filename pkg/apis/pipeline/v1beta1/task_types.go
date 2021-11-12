@@ -206,9 +206,9 @@ type TaskRef struct {
 	// Bundle url reference to a Tekton Bundle.
 	// +optional
 	Bundle string `json:"bundle,omitempty"`
-	// Verification configuration used to verify the TaskRef.
+	// Verification configuration used to verify the bundle.
 	// +optional
-	Verification *TaskVerification `json:"verification,omitempty"`
+	Verification *BundleVerification `json:"verification,omitempty"`
 }
 
 // TaskKind defines the type of Task used by the pipeline.
@@ -221,16 +221,20 @@ const (
 	ClusterTaskKind TaskKind = "ClusterTask"
 )
 
-// TaskVerification holds configuration used to verify a Task.
-type TaskVerification struct {
-	Signer TaskSigner `json:"signer,omitempty"`
-	Key    string     `json:"key,omitempty"`
+// BundleVerification holds configuration used to verify a bundle.
+type BundleVerification struct {
+	Signer BundleSigner `json:"signer,omitempty"`
+	Key    string       `json:"key,omitempty"`
 }
 
-// TaskSigner is an enum of valid signers.
-type TaskSigner string
+// BundleSigner is an enum of valid signers.
+type BundleSigner string
 
 const (
 	// CosignSigner is signatures generated using Cosign (https://github.com/sigstore/cosign).
-	CosignSigner TaskSigner = "cosign"
+	CosignSigner BundleSigner = "cosign"
+)
+
+var (
+	validVerficationSigners = []BundleSigner{CosignSigner}
 )
