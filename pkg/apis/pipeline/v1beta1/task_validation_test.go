@@ -30,7 +30,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"knative.dev/pkg/apis"
-	logtesting "knative.dev/pkg/logging/testing"
 )
 
 var validResource = v1beta1.TaskResource{
@@ -1169,7 +1168,7 @@ func TestStepOnError(t *testing.T) {
 			},
 		}},
 		expectedError: &apis.FieldError{
-			Message: fmt.Sprintf("invalid value: onError"),
+			Message: "invalid value: onError",
 			Paths:   []string{"onError"},
 			Details: "Task step onError must be either continue or stopAndFail",
 		},
@@ -1326,18 +1325,4 @@ func TestBundleVerificationValidateErrors(t *testing.T) {
 			}
 		})
 	}
-}
-
-func enableFeatureFlags(ctx context.Context, t *testing.T, flags ...string) context.Context {
-	t.Helper()
-	data := make(map[string]string)
-	for _, flag := range flags {
-		data[flag] = "true"
-	}
-	s := config.NewStore(logtesting.TestLogger(t))
-	s.OnConfigChanged(&corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: config.GetFeatureFlagsConfigName()},
-		Data:       data,
-	})
-	return s.ToContext(ctx)
 }

@@ -189,7 +189,7 @@ func validateStep(ctx context.Context, s Step, names sets.String) (errs *apis.Fi
 	if s.Script != "" {
 		if len(s.Command) > 0 {
 			errs = errs.Also(&apis.FieldError{
-				Message: fmt.Sprintf("script cannot be used with command"),
+				Message: "script cannot be used with command",
 				Paths:   []string{"script"},
 			})
 		}
