@@ -261,8 +261,48 @@ func TestTaskRunSpec_Invalidate(t *testing.T) {
 		},
 		wantErr: apis.ErrInvalidValue("breakito is not a valid breakpoint. Available valid breakpoints include [onFailure]", "debug.breakpoint"),
 		wc:      enableAlphaAPIFields,
+	}, {
+		name: "taskRef verification without feature flag",
+		spec: v1beta1.TaskRunSpec{
+			TaskRef: &v1beta1.TaskRef{
+				Name:   "my-task",
+				Bundle: "gcr.io/example-bundle",
+				Verification: &v1beta1.BundleVerification{
+					Signer: v1beta1.CosignSigner,
+					Key:    "my-public-key",
+				},
+			},
+		},
+		wantErr: apis.ErrDisallowedFields("taskRef.bundle", "taskRef.verification"),
+	}, {
+		name: "invalid taskRef verification",
+		wc:   enableAlphaAPIFields,
+		spec: v1beta1.TaskRunSpec{
+			TaskRef: &v1beta1.TaskRef{
+				Name:   "my-task",
+				Bundle: "gcr.io/example-bundle",
+				Verification: &v1beta1.BundleVerification{
+					Signer: "****INVALID SIGNER****",
+					Key:    "my-public-key",
+				},
+			},
+		},
+		wantErr: apis.ErrInvalidValue(`invalid signer "****INVALID SIGNER****"`, "taskRef.verification.signer", `signer must be in ["cosign"]`),
+	}, {
+		name: "taskRef verification without bundle",
+		wc:   enableAlphaAPIFields,
+		spec: v1beta1.TaskRunSpec{
+			TaskRef: &v1beta1.TaskRef{
+				Name: "my-task",
+				Verification: &v1beta1.BundleVerification{
+					Signer: v1beta1.CosignSigner,
+					Key:    "my-public-key",
+				},
+			},
+		},
+		wantErr: apis.ErrInvalidValue("bundle is required if verification is configured", "taskRef.verification"),
 	}}
-	t.Fail() // Add tests
+
 	for _, ts := range tests {
 		t.Run(ts.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -281,6 +321,7 @@ func TestTaskRunSpec_Validate(t *testing.T) {
 	tests := []struct {
 		name string
 		spec v1beta1.TaskRunSpec
+		wc   func(context.Context) context.Context
 	}{{
 		name: "taskspec without a taskRef",
 		spec: v1beta1.TaskRunSpec{
@@ -330,11 +371,29 @@ func TestTaskRunSpec_Validate(t *testing.T) {
 				}},
 			},
 		},
+	}, {
+		name: "taskRef with verification",
+		spec: v1beta1.TaskRunSpec{
+			TaskRef: &v1beta1.TaskRef{
+				Name:   "my-task-ref",
+				Bundle: "gcr.io/example-bundle",
+				Verification: &v1beta1.BundleVerification{
+					Signer: v1beta1.CosignSigner,
+					Key:    "some-public-key",
+				},
+			},
+		},
+		wc: enableAlphaAPIFields,
 	}}
-	t.Fail() // Add tests
+
 	for _, ts := range tests {
 		t.Run(ts.name, func(t *testing.T) {
-			if err := ts.spec.Validate(context.Background()); err != nil {
+			ctx := context.Background()
+			if ts.wc != nil {
+				ctx = ts.wc(ctx)
+			}
+
+			if err := ts.spec.Validate(ctx); err != nil {
 				t.Error(err)
 			}
 		})

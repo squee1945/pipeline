@@ -75,13 +75,13 @@ func (ts *TaskRunSpec) Validate(ctx context.Context) (errs *apis.FieldError) {
 
 	if cfg.FeatureFlags.EnableTaskVerification {
 		if ts.TaskRef != nil && ts.TaskRef.Verification != nil && ts.TaskRef.Bundle == "" {
-			errs = errs.Also(apis.ErrInvalidValue("bundle is required if verification is configured", "verification"))
+			errs = errs.Also(apis.ErrInvalidValue("bundle is required if verification is configured", "taskRef.verification"))
 		}
 		if ts.TaskRef != nil && ts.TaskRef.Verification != nil {
-			errs = errs.Also(ts.TaskRef.Verification.Validate(ctx).ViaField("verification"))
+			errs = errs.Also(ts.TaskRef.Verification.Validate(ctx).ViaField("taskRef.verification"))
 		}
-	} else {
-		errs = errs.Also(apis.ErrDisallowedFields("verification"))
+	} else if ts.TaskRef != nil && ts.TaskRef.Verification != nil {
+		errs = errs.Also(apis.ErrDisallowedFields("taskRef.verification"))
 	}
 
 	// Validate TaskSpec if it's present
