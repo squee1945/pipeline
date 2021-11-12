@@ -209,14 +209,9 @@ func constructImage(resources []*resource) (v1.Image, error) {
 		}
 
 		// Wrap the tarball layer to inject annotations.
-		annotations := map[string]string{
-			"dev.tekton.image.apiVersion": resource.key.apiVersion,
-			"dev.tekton.image.kind":       resource.key.kind,
-			"dev.tekton.image.name":       resource.key.name,
-		}
-		annotatedLayer := &annotatedLayer{layer: layer, annotations: annotations}
+		bundleLayer := newBundleLayer(layer, resource.key)
 
-		image, err = mutate.AppendLayers(image, annotatedLayer)
+		image, err = mutate.AppendLayers(image, bundleLayer)
 		if err != nil {
 			return nil, fmt.Errorf("appending layer: %v", err)
 		}
@@ -258,14 +253,23 @@ func publishImage(image v1.Image, ref name.Reference) (string, error) {
 	return digest.String(), nil
 }
 
-type annotatedLayer struct {
-	layer       v1.Layer
-	annotations map[string]string
+func newBundleLayer(layer v1.Layer, key resourceKey) v1.Layer {
+	return &bundleLayer{layer: layer, key: key}
 }
 
-func (al *annotatedLayer) Descriptor() (*v1.Descriptor, error) {
+type bundleLayer struct {
+	layer v1.Layer
+	key   resourceKey
+}
+
+func (al *bundleLayer) Descriptor() (*v1.Descriptor, error) {
+	annotations := map[string]string{
+		"dev.tekton.image.apiVersion": al.key.apiVersion,
+		"dev.tekton.image.kind":       al.key.kind,
+		"dev.tekton.image.name":       al.key.name,
+	}
 	d := v1.Descriptor{
-		Annotations: al.annotations,
+		Annotations: annotations,
 	}
 	var err error
 	if d.MediaType, err = al.layer.MediaType(); err != nil {
@@ -281,31 +285,31 @@ func (al *annotatedLayer) Descriptor() (*v1.Descriptor, error) {
 }
 
 // Digest returns the Hash of the compressed layer.
-func (al *annotatedLayer) Digest() (v1.Hash, error) {
+func (al *bundleLayer) Digest() (v1.Hash, error) {
 	return al.layer.Digest()
 }
 
 // DiffID returns the Hash of the uncompressed layer.
-func (al *annotatedLayer) DiffID() (v1.Hash, error) {
+func (al *bundleLayer) DiffID() (v1.Hash, error) {
 	return al.layer.DiffID()
 }
 
 // Compressed returns an io.ReadCloser for the compressed layer contents.
-func (al *annotatedLayer) Compressed() (io.ReadCloser, error) {
+func (al *bundleLayer) Compressed() (io.ReadCloser, error) {
 	return al.layer.Compressed()
 }
 
 // Uncompressed returns an io.ReadCloser for the uncompressed layer contents.
-func (al *annotatedLayer) Uncompressed() (io.ReadCloser, error) {
+func (al *bundleLayer) Uncompressed() (io.ReadCloser, error) {
 	return al.layer.Uncompressed()
 }
 
 // Size returns the compressed size of the Layer.
-func (al *annotatedLayer) Size() (int64, error) {
+func (al *bundleLayer) Size() (int64, error) {
 	return al.layer.Size()
 }
 
 // MediaType returns the media type of the Layer.
-func (al *annotatedLayer) MediaType() (types.MediaType, error) {
+func (al *bundleLayer) MediaType() (types.MediaType, error) {
 	return al.layer.MediaType()
 }
