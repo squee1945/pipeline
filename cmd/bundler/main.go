@@ -92,7 +92,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println(ref.Name() + "@" + digest)
+	fmt.Println(ref.String() + "@" + digest)
 }
 
 func usage() string {
@@ -263,13 +263,12 @@ type bundleLayer struct {
 }
 
 func (al *bundleLayer) Descriptor() (*v1.Descriptor, error) {
-	annotations := map[string]string{
-		"dev.tekton.image.apiVersion": al.key.apiVersion,
-		"dev.tekton.image.kind":       al.key.kind,
-		"dev.tekton.image.name":       al.key.name,
-	}
 	d := v1.Descriptor{
-		Annotations: annotations,
+		Annotations: map[string]string{
+			"dev.tekton.image.apiVersion": al.key.apiVersion,
+			"dev.tekton.image.kind":       al.key.kind,
+			"dev.tekton.image.name":       al.key.name,
+		},
 	}
 	var err error
 	if d.MediaType, err = al.layer.MediaType(); err != nil {
