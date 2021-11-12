@@ -18,6 +18,7 @@ limitations under the License.
 package main
 
 import (
+	"archive/tar"
 	"flag"
 	"fmt"
 	"os"
@@ -31,6 +32,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -51,7 +53,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if len(os.Args) == 0 {
+	if len(flag.Args()) == 0 {
 		fmt.Println("Must provide at least one config file.")
 		os.Exit(1)
 	}
@@ -66,8 +68,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	files := os.Args[1:]
-	resources, err := parseFiles(files)
+	resources, err := parseFiles(flag.Args())
 	if err != nil {
 		fmt.Printf("Error reading files: %v", err)
 		os.Exit(1)
@@ -96,15 +97,20 @@ func usage() string {
 	return "bundler --image=<some-image, e.g., gcr.io/example.my-bundle> <config.yaml> [config.yaml]..."
 }
 
-type resource struct {
-	name       string
-	kind       string
+type resourceKey struct {
 	apiVersion string
-	content    string
+	kind       string
+	name       string
+}
+
+type resource struct {
+	key     resourceKey
+	content string
 }
 
 func parseFiles(filenames []string) ([]*resource, error) {
 	var resources []*resource
+	keys := make(map[resourceKey]bool)
 	for _, filename := range filenames {
 		contents, err := os.ReadFile(filename)
 		if err != nil {
@@ -114,12 +120,16 @@ func parseFiles(filenames []string) ([]*resource, error) {
 		parts := strings.Split(string(contents), "---\n")
 
 		for index, part := range parts {
-			resource, err := parseResource(part, filename, index)
+			r, err := parseResource(part, filename, index)
 			if err != nil {
-				name := partName(part)
-				return nil, fmt.Errorf("parsing part: %v\n%s", err, name)
+				return nil, fmt.Errorf("parsing resource: %v", err)
 			}
-			resources = append(resources, resource)
+			fmt.Fprintf(os.Stderr, "Found %v (filename %s, index %d)\n", r.key, filename, index)
+			if _, found := keys[r.key]; found {
+				return nil, fmt.Errorf("duplicate entry %v", r.key)
+			}
+			keys[r.key] = true
+			resources = append(resources, r)
 		}
 	}
 	return resources, nil
@@ -167,18 +177,13 @@ func parseResource(s, filename string, index int) (*resource, error) {
 	}
 
 	return &resource{
-		name:       yr.Metadata.Name,
-		kind:       yr.Kind,
-		apiVersion: yr.ApiVersion,
-		content:    s,
+		key: resourceKey{
+			apiVersion: yr.ApiVersion,
+			kind:       yr.Kind,
+			name:       yr.Metadata.Name,
+		},
+		content: s,
 	}, nil
-}
-
-func partName(part string) string {
-	if len(part) < 300 {
-		return part
-	}
-	return part[:300]
 }
 
 func constructImage(resources []*resource) (v1.Image, error) {
@@ -189,27 +194,56 @@ func constructImage(resources []*resource) (v1.Image, error) {
 	defer os.RemoveAll(tempDir)
 
 	image := empty.Image
-	for i, resource := range resources {
-		fname := fmt.Sprintf("resource-%d.yaml", i)
-		if err := os.WriteFile(fname, []byte(resource.content), 0600); err != nil {
-			return nil, fmt.Errorf("writing file %s: %v", fname, err)
+	for index, resource := range resources {
+		tarname := filepath.Join(tempDir, fmt.Sprintf("resource-%d.tar", index))
+		if err := createTarball(tarname, resource, index); err != nil {
+			return nil, fmt.Errorf("creating tarball: %v", err)
 		}
+
+		annotations := map[string]string{
+			"dev.tekton.image.apiVersion": resource.key.apiVersion,
+			"dev.tekton.image.kind":       resource.key.kind,
+			"dev.tekton.image.name":       resource.key.name,
+		}
+
 		var err error
-		image, err = crane.Append(image, fname)
+		layer, err := tarball.LayerFromFile(tarname, tarball.WithAnnotations(annotations))
+		if err != nil {
+			return nil, fmt.Errorf("creating layer: %v", err)
+		}
+
+		image, err = mutate.AppendLayers(image, layer)
 		if err != nil {
 			return nil, fmt.Errorf("appending layer: %v", err)
 		}
-		annotations := map[string]string{
-			"dev.tekton.image.name":       resource.name,
-			"dev.tekton.image.kind":       resource.kind,
-			"dev.tekton.image.apiVersion": resource.apiVersion,
-		}
-		image = mutate.Annotations(image, annotations).(v1.Image)
 	}
 	return image, nil
 }
 
+func createTarball(name string, res *resource, index int) error {
+	tarfile, err := os.Create(name)
+	if err != nil {
+		return err
+	}
+	defer tarfile.Close()
+	tw := tar.NewWriter(tarfile)
+
+	hdr := &tar.Header{
+		Name: fmt.Sprintf("resource-%d.yaml", index),
+		Mode: 0600,
+		Size: int64(len(res.content)),
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		return err
+	}
+	if _, err := tw.Write([]byte(res.content)); err != nil {
+		return err
+	}
+	return nil
+}
+
 func publishImage(image v1.Image, ref name.Reference) (string, error) {
+	fmt.Fprintf(os.Stderr, "Publishing image %s\n", ref)
 	if err := crane.Push(image, ref.String()); err != nil {
 		return "", fmt.Errorf("pushing image: %v", err)
 	}
