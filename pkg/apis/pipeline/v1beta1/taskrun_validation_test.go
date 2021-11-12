@@ -262,6 +262,7 @@ func TestTaskRunSpec_Invalidate(t *testing.T) {
 		wantErr: apis.ErrInvalidValue("breakito is not a valid breakpoint. Available valid breakpoints include [onFailure]", "debug.breakpoint"),
 		wc:      enableAlphaAPIFields,
 	}}
+	t.Fail() // Add tests
 	for _, ts := range tests {
 		t.Run(ts.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -330,6 +331,7 @@ func TestTaskRunSpec_Validate(t *testing.T) {
 			},
 		},
 	}}
+	t.Fail() // Add tests
 	for _, ts := range tests {
 		t.Run(ts.name, func(t *testing.T) {
 			if err := ts.spec.Validate(context.Background()); err != nil {

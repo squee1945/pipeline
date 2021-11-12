@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/tektoncd/pipeline/pkg/apis/config"
 	"github.com/tektoncd/pipeline/pkg/apis/validate"
 	"github.com/tektoncd/pipeline/pkg/substitution"
@@ -400,53 +399,22 @@ func validateTaskArraysIsolated(value, prefix string, arrayNames sets.String) *a
 	return substitution.ValidateVariableIsolatedP(value, prefix, arrayNames)
 }
 
-// Validate implements apis.Validatable
-func (tr *TaskRef) Validate(ctx context.Context) (errs *apis.FieldError) {
-	cfg := config.FromContextOrDefaults(ctx)
-
-	if tr.Name == "" {
-		errs = errs.Also(apis.ErrMissingField("name"))
-	}
-
-	if tr.Bundle != "" {
-		// If EnableTektonOCIBundles feature flag is on, validate it.
-		// Otherwise, fail if it is present (as it won't be allowed nor used)
-		if cfg.FeatureFlags.EnableTektonOCIBundles {
-			// Check that if a bundle is specified, that a name is specified as well.
-			if tr.Name == "" {
-				errs = errs.Also(apis.ErrMissingField("name"))
-			}
-			// If a bundle url is specified, ensure it is parseable.
-			if _, err := name.ParseReference(tr.Bundle); err != nil {
-				errs = errs.Also(apis.ErrInvalidValue(fmt.Sprintf("invalid bundle reference (%s)", err.Error()), "bundle"))
-			}
-		} else {
-			errs = errs.Also(apis.ErrDisallowedFields("bundle"))
-		}
-	}
-
-	if tr.Verification != nil {
-		// If EnableTaskVerification feature flag is on, validate it.
-		// Otherwise, fail if it is present (as it won't be allowed or used).
-		if cfg.FeatureFlags.EnableTaskVerification {
-			// Initial implementation requires a bundle
-			if tr.Bundle == "" {
-				errs = errs.Also(apis.ErrInvalidValue("bundle is required if verification is configured", "verification"))
-			} else {
-				errs = errs.Also(tr.Verification.Validate(ctx).ViaField("verification"))
-			}
-		} else {
-			errs = errs.Also(apis.ErrDisallowedFields("verification"))
-		}
-	}
-
-	return errs
-}
-
-// Validate validates a BundleVerification
+// Validate validates a BundleVerification.
 func (tv *BundleVerification) Validate(_ context.Context) (errs *apis.FieldError) {
 	if tv.Signer == "" {
 		errs = errs.Also(apis.ErrMissingField("signer"))
+	}
+	if tv.Signer != "" {
+		found := false
+		for _, valid := range validVerficationSigners {
+			if tv.Signer == valid {
+				found = true
+				break
+			}
+		}
+		if !found {
+			errs = errs.Also(apis.ErrInvalidValue(fmt.Sprintf("invalid signer %q", tv.Signer), "signer", fmt.Sprintf("signer must be in %q", validVerficationSigners)))
+		}
 	}
 	if tv.Key == "" {
 		errs = errs.Also(apis.ErrMissingField("key"))
