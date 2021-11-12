@@ -208,13 +208,14 @@ func constructImage(resources []*resource) (v1.Image, error) {
 			return nil, fmt.Errorf("creating layer: %v", err)
 		}
 
+		// Wrap the tarball layer to inject annotations.
 		annotations := map[string]string{
 			"dev.tekton.image.apiVersion": resource.key.apiVersion,
 			"dev.tekton.image.kind":       resource.key.kind,
 			"dev.tekton.image.name":       resource.key.name,
 		}
-
 		annotatedLayer := &annotatedLayer{layer: layer, annotations: annotations}
+
 		image, err = mutate.AppendLayers(image, annotatedLayer)
 		if err != nil {
 			return nil, fmt.Errorf("appending layer: %v", err)
