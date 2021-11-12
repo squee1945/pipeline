@@ -21,6 +21,7 @@ import (
 	"archive/tar"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -33,6 +34,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -200,19 +202,20 @@ func constructImage(resources []*resource) (v1.Image, error) {
 			return nil, fmt.Errorf("creating tarball: %v", err)
 		}
 
+		var err error
+		layer, err := tarball.LayerFromFile(tarname)
+		if err != nil {
+			return nil, fmt.Errorf("creating layer: %v", err)
+		}
+
 		annotations := map[string]string{
 			"dev.tekton.image.apiVersion": resource.key.apiVersion,
 			"dev.tekton.image.kind":       resource.key.kind,
 			"dev.tekton.image.name":       resource.key.name,
 		}
 
-		var err error
-		layer, err := tarball.LayerFromFile(tarname, tarball.WithAnnotations(annotations))
-		if err != nil {
-			return nil, fmt.Errorf("creating layer: %v", err)
-		}
-
-		image, err = mutate.AppendLayers(image, layer)
+		annotatedLayer := &annotatedLayer{layer: layer, annotations: annotations}
+		image, err = mutate.AppendLayers(image, annotatedLayer)
 		if err != nil {
 			return nil, fmt.Errorf("appending layer: %v", err)
 		}
@@ -252,4 +255,56 @@ func publishImage(image v1.Image, ref name.Reference) (string, error) {
 		return "", fmt.Errorf("fetching digest: %v", err)
 	}
 	return digest.String(), nil
+}
+
+type annotatedLayer struct {
+	layer       v1.Layer
+	annotations map[string]string
+}
+
+func (al *annotatedLayer) Descriptor() (*v1.Descriptor, error) {
+	d := v1.Descriptor{
+		Annotations: al.annotations,
+	}
+	var err error
+	if d.MediaType, err = al.layer.MediaType(); err != nil {
+		return nil, err
+	}
+	if d.Size, err = al.layer.Size(); err != nil {
+		return nil, err
+	}
+	if d.Digest, err = al.layer.Digest(); err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+// Digest returns the Hash of the compressed layer.
+func (al *annotatedLayer) Digest() (v1.Hash, error) {
+	return al.layer.Digest()
+}
+
+// DiffID returns the Hash of the uncompressed layer.
+func (al *annotatedLayer) DiffID() (v1.Hash, error) {
+	return al.layer.DiffID()
+}
+
+// Compressed returns an io.ReadCloser for the compressed layer contents.
+func (al *annotatedLayer) Compressed() (io.ReadCloser, error) {
+	return al.layer.Compressed()
+}
+
+// Uncompressed returns an io.ReadCloser for the uncompressed layer contents.
+func (al *annotatedLayer) Uncompressed() (io.ReadCloser, error) {
+	return al.layer.Uncompressed()
+}
+
+// Size returns the compressed size of the Layer.
+func (al *annotatedLayer) Size() (int64, error) {
+	return al.layer.Size()
+}
+
+// MediaType returns the media type of the Layer.
+func (al *annotatedLayer) MediaType() (types.MediaType, error) {
+	return al.layer.MediaType()
 }
