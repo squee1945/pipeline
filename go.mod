@@ -3,6 +3,7 @@ module github.com/tektoncd/pipeline
 go 1.13
 
 require (
+	github.com/Azure/azure-sdk-for-go v55.8.0+incompatible // indirect
 	github.com/cloudevents/sdk-go/v2 v2.5.0
 	github.com/docker/cli v20.10.8+incompatible // indirect
 	github.com/docker/docker v20.10.8+incompatible // indirect
@@ -20,6 +21,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/sigstore/cosign v1.3.1 // indirect
+	github.com/sigstore/sigstore v1.0.1 // indirect
 	github.com/tektoncd/plumbing v0.0.0-20211012143332-c7cc43d9bc0c
 	go.opencensus.io v0.23.0
 	go.uber.org/multierr v1.7.0 // indirect

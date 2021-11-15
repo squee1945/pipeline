@@ -31,6 +31,7 @@ import (
 	ociremote "github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/tektoncd/pipeline/pkg/client/clientset/versioned/scheme"
 	"github.com/tektoncd/pipeline/pkg/remote"
+	"github.com/tektoncd/pipeline/pkg/remote/oci/verify"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -111,7 +112,7 @@ func (o *Resolver) List() ([]remote.ResolvedObject, error) {
 }
 
 // Get retrieves a specific object with the given Kind and name.
-func (o *Resolver) Get(kind, name string) (runtime.Object, error) {
+func (o *Resolver) Get(kind, objectName string) (runtime.Object, error) {
 	imgRef, err := name.ParseReference(o.imageReference)
 	if err != nil {
 		return nil, fmt.Errorf("%s is an unparseable image reference: %w", o.imageReference, err)
@@ -156,7 +157,7 @@ func (o *Resolver) Get(kind, name string) (runtime.Object, error) {
 		lKind := l.Annotations[KindAnnotation]
 		lName := l.Annotations[TitleAnnotation]
 
-		if kind == lKind && name == lName {
+		if kind == lKind && objectName == lName {
 			obj, err := readTarLayer(layerMap[l.Digest.String()])
 			if err != nil {
 				// This could still be a raw layer so try to read it as that instead.
@@ -172,7 +173,7 @@ func (o *Resolver) Get(kind, name string) (runtime.Object, error) {
 			return obj, nil
 		}
 	}
-	return nil, fmt.Errorf("could not find object in image with kind: %s and name: %s", kind, name)
+	return nil, fmt.Errorf("could not find object in image with kind: %s and name: %s", kind, objectName)
 }
 
 // retrieveImage will fetch the image's contents and manifest.
@@ -215,11 +216,19 @@ func (o *Resolver) verifyImage(ctx context.Context, imgRef name.Reference) error
 		return nil
 	}
 
-	verifier, err := lookupVerifier(o.signer)
-	if err != nil {
-		return err
+	var err error
+	var v verify.Verifier
+	switch o.signer {
+	case "cosign":
+		v, err = verify.NewCosignVerifier(o.keychain)
+		if err != nil {
+			return fmt.Errorf("initializing cosign: %v", err)
+		}
+	default:
+		return fmt.Errorf("unknown signer %q", o.signer)
 	}
-	verified, err := verifier.Verify(ctx, imgRef, o.key, o.keychain)
+
+	verified, err := v.Verify(ctx, imgRef, o.key)
 	if err != nil {
 		return err
 	}

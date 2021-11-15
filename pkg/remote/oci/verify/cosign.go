@@ -1,4 +1,4 @@
-package oci
+package verify
 
 import (
 	"context"
@@ -8,18 +8,24 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	ociremote "github.com/google/go-containerregistry/pkg/remote"
+	ociremote "github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sigstore/cosign/pkg/cosign"
 	"github.com/sigstore/cosign/pkg/cosign/pkcs11key"
-	cosignremote "github.com/sigstore/cosign/pkg/cosign/pkg/remote"
-	cosignsignature "github.com/sigstore/cosign/pkg/cosign/pkg/signature"
+	cosignremote "github.com/sigstore/cosign/pkg/oci/remote"
+	cosignsignature "github.com/sigstore/cosign/pkg/signature"
 	"github.com/sigstore/sigstore/pkg/signature"
 )
 
-type cosignVerifier struct{}
+type cosignVerifier struct {
+	keychain authn.Keychain
+}
 
-func (c *cosignVerifier) Verify(ctx context.Context, imgRef name.Reference, key string, keychain authn.Keychain) (bool, error) {
-	remoteOpts := []ociremote.Option{ociremote.WithAuthFromKeychain(keychain), ociremote.WithContext(ctx)}
+func NewCosignVerifier(keychain authn.Keychain) (Verifier, error) {
+	return &cosignVerifier{keychain: keychain}, nil
+}
+
+func (c *cosignVerifier) Verify(ctx context.Context, imgRef name.Reference, key string) (bool, error) {
+	remoteOpts := []ociremote.Option{ociremote.WithAuthFromKeychain(c.keychain), ociremote.WithContext(ctx)}
 	clientOpts := []cosignremote.Option{cosignremote.WithRemoteOptions(remoteOpts...)}
 	cosignOpts := &cosign.CheckOpts{
 		Annotations:        map[string]interface{}{},
