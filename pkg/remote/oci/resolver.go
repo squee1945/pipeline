@@ -27,7 +27,6 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	imgname "github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	ociremote "github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/tektoncd/pipeline/pkg/client/clientset/versioned/scheme"
@@ -77,7 +76,7 @@ func NewResolver(ref string, keychain authn.Keychain, opts ...ResolverOption) re
 
 // List retrieves a flat set of Tekton objects.
 func (o *Resolver) List() ([]remote.ResolvedObject, error) {
-	imgRef, err := imgname.ParseReference(o.imageReference)
+	imgRef, err := name.ParseReference(o.imageReference)
 	if err != nil {
 		return nil, fmt.Errorf("%s is an unparseable image reference: %w", o.imageReference, err)
 	}
@@ -113,7 +112,7 @@ func (o *Resolver) List() ([]remote.ResolvedObject, error) {
 
 // Get retrieves a specific object with the given Kind and name.
 func (o *Resolver) Get(kind, name string) (runtime.Object, error) {
-	imgRef, err := imgname.ParseReference(o.imageReference)
+	imgRef, err := name.ParseReference(o.imageReference)
 	if err != nil {
 		return nil, fmt.Errorf("%s is an unparseable image reference: %w", o.imageReference, err)
 	}
