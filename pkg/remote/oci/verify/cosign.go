@@ -20,6 +20,8 @@ type cosignVerifier struct {
 	keychain authn.Keychain
 }
 
+var _ Verifier = (*cosignVerifier)(nil) // Ensure interface is implemented.
+
 func NewCosignVerifier(keychain authn.Keychain) (Verifier, error) {
 	return &cosignVerifier{keychain: keychain}, nil
 }
